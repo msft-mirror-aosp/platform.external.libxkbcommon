@@ -1,4 +1,4 @@
-/* A Bison parser, made by GNU Bison 3.6.3.  */
+/* A Bison parser, made by GNU Bison 3.7.2.  */
 
 /* Bison interface for Yacc-like parsers in C
 
@@ -35,8 +35,8 @@
    especially those whose name start with YY_ or yy_.  They are
    private implementation details that can be changed or removed.  */
 
-#ifndef YY__XKBCOMMON_XKBCOMMON_SHA_PARSER_H_INCLUDED
-# define YY__XKBCOMMON_XKBCOMMON_SHA_PARSER_H_INCLUDED
+#ifndef YY__XKBCOMMON_LIBXKBCOMMON_SO_0_0_0_P_PARSER_H_INCLUDED
+# define YY__XKBCOMMON_LIBXKBCOMMON_SO_0_0_0_P_PARSER_H_INCLUDED
 /* Debug traces.  */
 #ifndef YYDEBUG
 # define YYDEBUG 0
@@ -154,7 +154,7 @@ union YYSTYPE
         XkbFile         *file;
         struct { XkbFile *head; XkbFile *last; } fileList;
 
-#line 158 "xkbcommon@sha/parser.h"
+#line 158 "libxkbcommon.so.0.0.0.p/parser.h"
 
 };
 typedef union YYSTYPE YYSTYPE;
@@ -166,4 +166,4 @@ typedef union YYSTYPE YYSTYPE;
 
 int _xkbcommon_parse (struct parser_param *param);
 
-#endif /* !YY__XKBCOMMON_XKBCOMMON_SHA_PARSER_H_INCLUDED  */
+#endif /* !YY__XKBCOMMON_LIBXKBCOMMON_SO_0_0_0_P_PARSER_H_INCLUDED  */
