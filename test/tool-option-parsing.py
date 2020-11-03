@@ -28,15 +28,11 @@ import sys
 import subprocess
 import logging
 import tempfile
-
-try:
-    import pytest
-except ImportError:
-    print('Failed to import pytest. Skipping.', file=sys.stderr)
-    sys.exit(77)
+import unittest
 
 
 top_builddir = os.environ['top_builddir']
+top_srcdir = os.environ['top_srcdir']
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger('test')
@@ -45,7 +41,7 @@ logger.setLevel(logging.DEBUG)
 # Permutation of RMLVO that we use in multiple tests
 rmlvos = [list(x) for x in itertools.permutations(
     ['--rules=evdev', '--model=pc104',
-     '--layout=fr', '--options=eurosign:5']
+     '--layout=ch', '--options=eurosign:5']
 )]
 
 
@@ -69,11 +65,15 @@ class XkbcliTool:
     xkbcli_tool = 'xkbcli'
     subtool = None
 
-    def __init__(self, subtool=None):
+    def __init__(self, subtool=None, skipIf=()):
         self.tool_path = top_builddir
         self.subtool = subtool
+        self.skipIf = skipIf
 
     def run_command(self, args):
+        for condition, reason in self.skipIf:
+            if condition:
+                raise unittest.SkipTest(reason)
         if self.subtool is not None:
             tool = '{}-{}'.format(self.xkbcli_tool, self.subtool)
         else:
@@ -104,209 +104,187 @@ class XkbcliTool:
         assert stdout.startswith('Usage') or stdout == ''
         assert 'requires an argument' in stderr
 
-
-def get_tool(subtool=None):
-    return XkbcliTool(subtool)
-
-
-def get_all_tools():
-    return [get_tool(x) for x in [None, 'list',
-                                  'compile-keymap',
-                                  'how-to-type',
-                                  'interactive-evdev',
-                                  'interactive-wayland',
-                                  'interactive-x11']]
+    def __str__(self):
+        return str(self.subtool)
 
 
-@pytest.fixture
-def xkbcli():
-    return get_tool()
+class TestXkbcli(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.xkbcli = XkbcliTool()
+        cls.xkbcli_list = XkbcliTool('list', skipIf=(
+            (not int(os.getenv('HAVE_XKBCLI_LIST', '1')), 'xkbregistory not enabled'),
+        ))
+        cls.xkbcli_how_to_type = XkbcliTool('how-to-type')
+        cls.xkbcli_compile_keymap = XkbcliTool('compile-keymap')
+        cls.xkbcli_interactive_evdev = XkbcliTool('interactive-evdev', skipIf=(
+            (not int(os.getenv('HAVE_XKBCLI_INTERACTIVE_EVDEV', '1')), 'evdev not enabled'),
+            (not os.path.exists('/dev/input/event0'), 'event node required'),
+            (not os.access('/dev/input/event0', os.R_OK), 'insufficient permissions'),
+        ))
+        cls.xkbcli_interactive_x11 = XkbcliTool('interactive-x11', skipIf=(
+            (not int(os.getenv('HAVE_XKBCLI_INTERACTIVE_X11', '1')), 'x11 not enabled'),
+            (not os.getenv('DISPLAY'), 'DISPLAY not set'),
+        ))
+        cls.xkbcli_interactive_wayland = XkbcliTool('interactive-wayland', skipIf=(
+            (not int(os.getenv('HAVE_XKBCLI_INTERACTIVE_WAYLAND', '1')), 'wayland not enabled'),
+            (not os.getenv('WAYLAND_DISPLAY'), 'WAYLAND_DISPLAY not set'),
+        ))
+        cls.all_tools = [
+            cls.xkbcli,
+            cls.xkbcli_list,
+            cls.xkbcli_how_to_type,
+            cls.xkbcli_compile_keymap,
+            cls.xkbcli_interactive_evdev,
+            cls.xkbcli_interactive_x11,
+            cls.xkbcli_interactive_wayland,
+        ]
 
+    def test_help(self):
+        # --help is supported by all tools
+        for tool in self.all_tools:
+            with self.subTest(tool=tool):
+                stdout, stderr = tool.run_command_success(['--help'])
+                assert stdout.startswith('Usage:')
+                assert stderr == ''
 
-@pytest.fixture
-def xkbcli_list():
-    return get_tool('list')
+    def test_invalid_option(self):
+        # --foobar generates "Usage:" for all tools
+        for tool in self.all_tools:
+            with self.subTest(tool=tool):
+                tool.run_command_unrecognized_option(['--foobar'])
 
+    def test_xkbcli_version(self):
+        # xkbcli --version
+        stdout, stderr = self.xkbcli.run_command_success(['--version'])
+        assert stdout.startswith('1')
+        assert stderr == ''
 
-@pytest.fixture
-def xkbcli_how_to_type():
-    return get_tool('how-to-type')
+    def test_xkbcli_too_many_args(self):
+        self.xkbcli.run_command_invalid(['a'] * 64)
 
+    def test_compile_keymap_args(self):
+        for args in (
+            ['--verbose'],
+            ['--rmlvo'],
+            # ['--kccgst'],
+            ['--verbose', '--rmlvo'],
+            # ['--verbose', '--kccgst'],
+        ):
+            with self.subTest(args=args):
+                self.xkbcli_compile_keymap.run_command_success(args)
 
-@pytest.fixture
-def xkbcli_compile_keymap():
-    return get_tool('compile-keymap')
+    def test_compile_keymap_rmlvo(self):
+        for rmlvo in rmlvos:
+            with self.subTest(rmlvo=rmlvo):
+                self.xkbcli_compile_keymap.run_command_success(rmlvo)
 
+    def test_compile_keymap_include(self):
+        for args in (
+            ['--include', '.', '--include-defaults'],
+            ['--include', '/tmp', '--include-defaults'],
+        ):
+            with self.subTest(args=args):
+                # Succeeds thanks to include-defaults
+                self.xkbcli_compile_keymap.run_command_success(args)
 
-@pytest.fixture
-def xkbcli_interactive_evdev():
-    return get_tool('interactive-evdev')
+    def test_compile_keymap_include_invalid(self):
+        # A non-directory is rejected by default
+        args = ['--include', '/proc/version']
+        rc, stdout, stderr = self.xkbcli_compile_keymap.run_command(args)
+        assert rc == 1, (stdout, stderr)
+        assert "There are no include paths to search" in stderr
 
+        # A non-existing directory is rejected by default
+        args = ['--include', '/tmp/does/not/exist']
+        rc, stdout, stderr = self.xkbcli_compile_keymap.run_command(args)
+        assert rc == 1, (stdout, stderr)
+        assert "There are no include paths to search" in stderr
 
-@pytest.fixture
-def xkbcli_interactive_x11():
-    return get_tool('interactive-x11')
+        # Valid dir, but missing files
+        args = ['--include', '/tmp']
+        rc, stdout, stderr = self.xkbcli_compile_keymap.run_command(args)
+        assert rc == 1, (stdout, stderr)
+        assert "Couldn't look up rules" in stderr
 
+    def test_how_to_type(self):
+        # Unicode codepoint conversions, we support whatever strtol does
+        for args in (['123'], ['0x123'], ['0123']):
+            with self.subTest(args=args):
+                self.xkbcli_how_to_type.run_command_success(args)
 
-@pytest.fixture
-def xkbcli_interactive_wayland():
-    return get_tool('interactive-wayland')
+    def test_how_to_type_rmlvo(self):
+        for rmlvo in rmlvos:
+            with self.subTest(rmlvo=rmlvo):
+                args = rmlvo + ['0x1234']
+                self.xkbcli_how_to_type.run_command_success(args)
 
+    def test_list_rmlvo(self):
+        for args in (
+            ['--verbose'],
+            ['-v'],
+            ['--verbose', '--load-exotic'],
+            ['--load-exotic'],
+            ['--ruleset=evdev'],
+            ['--ruleset=base'],
+        ):
+            with self.subTest(args=args):
+                self.xkbcli_list.run_command_success(args)
 
-# --help is supported by all tools
-@pytest.mark.parametrize('tool', get_all_tools())
-def test_help(tool):
-    stdout, stderr = tool.run_command_success(['--help'])
-    assert stdout.startswith('Usage:')
-    assert stderr == ''
+    def test_list_rmlvo_includes(self):
+        args = ['/tmp/']
+        self.xkbcli_list.run_command_success(args)
 
+    def test_list_rmlvo_includes_invalid(self):
+        args = ['/proc/version']
+        rc, stdout, stderr = self.xkbcli_list.run_command(args)
+        assert rc == 1
+        assert "Failed to append include path" in stderr
 
-# --foobar generates "Usage:" for all tools
-@pytest.mark.parametrize('tool', get_all_tools())
-def test_invalid_option(tool):
-    tool.run_command_unrecognized_option(['--foobar'])
+    def test_list_rmlvo_includes_no_defaults(self):
+        args = ['--skip-default-paths', '/tmp']
+        rc, stdout, stderr = self.xkbcli_list.run_command(args)
+        assert rc == 1
+        assert "Failed to parse XKB description" in stderr
 
+    def test_interactive_evdev_rmlvo(self):
+        for rmlvo in rmlvos:
+            with self.subTest(rmlvo=rmlvo):
+                self.xkbcli_interactive_evdev.run_command_success(rmlvos)
 
-# xkbcli --version
-def test_xkbcli_version(xkbcli):
-    stdout, stderr = xkbcli.run_command_success(['--version'])
-    assert stdout.startswith('0')
-    assert stderr == ''
+    def test_interactive_evdev(self):
+        # Note: --enable-compose fails if $prefix doesn't have the compose tables
+        # installed
+        for args in (
+            ['--report-state-changes'],
+            ['--enable-compose'],
+            ['--consumed-mode=xkb'],
+            ['--consumed-mode=gtk'],
+            ['--without-x11-offset'],
+        ):
+            with self.subTest(args=args):
+                self.xkbcli_interactive_evdev.run_command_success(args)
 
+    def test_interactive_x11(self):
+        # To be filled in if we handle something other than --help
+        pass
 
-def test_xkbcli_too_many_args(xkbcli):
-    xkbcli.run_command_invalid(['a'] * 64)
-
-
-@pytest.mark.parametrize('args', [['--verbose'],
-                                  ['--rmlvo'],
-                                  # ['--kccgst'],
-                                  ['--verbose', '--rmlvo'],
-                                  # ['--verbose', '--kccgst'],
-                                  ])
-def test_compile_keymap_args(xkbcli_compile_keymap, args):
-    xkbcli_compile_keymap.run_command_success(args)
-
-
-@pytest.mark.parametrize('rmlvos', rmlvos)
-def test_compile_keymap_rmlvo(xkbcli_compile_keymap, rmlvos):
-    xkbcli_compile_keymap.run_command_success(rmlvos)
-
-
-@pytest.mark.parametrize('args', [['--include', '.', '--include-defaults'],
-                                  ['--include', '/tmp', '--include-defaults'],
-                                  ])
-def test_compile_keymap_include(xkbcli_compile_keymap, args):
-    # Succeeds thanks to include-defaults
-    xkbcli_compile_keymap.run_command_success(args)
-
-
-def test_compile_keymap_include_invalid(xkbcli_compile_keymap):
-    # A non-directory is rejected by default
-    args = ['--include', '/proc/version']
-    rc, stdout, stderr = xkbcli_compile_keymap.run_command(args)
-    assert rc == 1, (stdout, stderr)
-    assert "There are no include paths to search" in stderr
-
-    # A non-existing directory is rejected by default
-    args = ['--include', '/tmp/does/not/exist']
-    rc, stdout, stderr = xkbcli_compile_keymap.run_command(args)
-    assert rc == 1, (stdout, stderr)
-    assert "There are no include paths to search" in stderr
-
-    # Valid dir, but missing files
-    args = ['--include', '/tmp']
-    rc, stdout, stderr = xkbcli_compile_keymap.run_command(args)
-    assert rc == 1, (stdout, stderr)
-    assert "Couldn't look up rules" in stderr
-
-
-# Unicode codepoint conversions, we support whatever strtol does
-@pytest.mark.parametrize('args', [['123'], ['0x123'], ['0123']])
-def test_how_to_type(xkbcli_how_to_type, args):
-    xkbcli_how_to_type.run_command_success(args)
-
-
-@pytest.mark.parametrize('rmlvos', rmlvos)
-def test_how_to_type_rmlvo(xkbcli_how_to_type, rmlvos):
-    args = rmlvos + ['0x1234']
-    xkbcli_how_to_type.run_command_success(args)
-
-
-@pytest.mark.parametrize('args', [['--verbose'],
-                                  ['-v'],
-                                  ['--verbose', '--load-exotic'],
-                                  ['--load-exotic'],
-                                  ['--ruleset=evdev'],
-                                  ['--ruleset=base'],
-                                  ])
-def test_list_rmlvo(xkbcli_list, args):
-    xkbcli_list.run_command_success(args)
-
-
-def test_list_rmlvo_includes(xkbcli_list):
-    args = ['/tmp/']
-    xkbcli_list.run_command_success(args)
-
-
-def test_list_rmlvo_includes_invalid(xkbcli_list):
-    args = ['/proc/version']
-    rc, stdout, stderr = xkbcli_list.run_command(args)
-    assert rc == 1
-    assert "Failed to append include path" in stderr
-
-
-def test_list_rmlvo_includes_no_defaults(xkbcli_list):
-    args = ['--skip-default-paths', '/tmp']
-    rc, stdout, stderr = xkbcli_list.run_command(args)
-    assert rc == 1
-    assert "Failed to parse XKB description" in stderr
-
-
-@pytest.mark.skipif(not os.path.exists('/dev/input/event0'), reason='event node required')
-@pytest.mark.skipif(not os.access('/dev/input/event0', os.R_OK), reason='insufficient permissions')
-@pytest.mark.parametrize('rmlvos', rmlvos)
-def test_interactive_evdev_rmlvo(xkbcli_interactive_evdev, rmlvos):
-    return
-    xkbcli_interactive_evdev.run_command_success(rmlvos)
-
-
-@pytest.mark.skipif(not os.path.exists('/dev/input/event0'),
-                    reason='event node required')
-@pytest.mark.skipif(not os.access('/dev/input/event0', os.R_OK),
-                    reason='insufficient permissions')
-@pytest.mark.parametrize('args', [['--report-state-changes'],
-                                  ['--enable-compose'],
-                                  ['--consumed-mode=xkb'],
-                                  ['--consumed-mode=gtk'],
-                                  ['--without-x11-offset'],
-                                  ])
-def test_interactive_evdev(xkbcli_interactive_evdev, args):
-    # Note: --enable-compose fails if $prefix doesn't have the compose tables
-    # installed
-    xkbcli_interactive_evdev.run_command_success(args)
-
-
-@pytest.mark.skipif(not os.getenv('DISPLAY'), reason='DISPLAY not set')
-def test_interactive_x11(xkbcli_interactive_x11):
-    # To be filled in if we handle something other than --help
-    pass
-
-
-@pytest.mark.skipif(not os.getenv('WAYLAND_DISPLAY'),
-                    reason='WAYLAND_DISPLAY not set')
-def test_interactive_wayland(xkbcli_interactive_wayland):
-    # To be filled in if we handle something other than --help
-    pass
+    def test_interactive_wayland(self):
+        # To be filled in if we handle something other than --help
+        pass
 
 
 if __name__ == '__main__':
     with tempfile.TemporaryDirectory() as tmpdir:
+        # Use our own test xkeyboard-config copy.
+        os.environ['XKB_CONFIG_ROOT'] = top_srcdir + '/test/data'
         # libxkbcommon has fallbacks when XDG_CONFIG_HOME isn't set so we need
         # to override it with a known (empty) directory. Otherwise our test
         # behavior depends on the system the test is run on.
         os.environ['XDG_CONFIG_HOME'] = tmpdir
+        # Prevent the legacy $HOME/.xkb from kicking in.
+        del os.environ['HOME']
         # This needs to be separated if we do specific extra path testing
         os.environ['XKB_CONFIG_EXTRA_PATH'] = tmpdir
 
-        sys.exit(pytest.main(args=[__file__]))
+        unittest.main()

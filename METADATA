@@ -7,13 +7,13 @@ third_party {
   }
   url {
     type: ARCHIVE
-    value: "https://github.com/xkbcommon/libxkbcommon/archive/xkbcommon-1.0.0.tar.gz"
+    value: "https://github.com/xkbcommon/libxkbcommon/archive/xkbcommon-1.0.1.tar.gz"
   }
-  version: "xkbcommon-1.0.0"
+  version: "xkbcommon-1.0.1"
   license_type: NOTICE
   last_upgrade_date {
     year: 2020
-    month: 9
-    day: 8
+    month: 10
+    day: 28
   }
 }
