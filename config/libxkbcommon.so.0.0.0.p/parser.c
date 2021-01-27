@@ -675,8 +675,8 @@ static const yytype_int16 yyrline[] =
      653,   655,   657,   661,   663,   665,   667,   669,   671,   673,
      675,   679,   681,   685,   689,   691,   693,   695,   699,   701,
      703,   705,   709,   710,   713,   715,   717,   719,   723,   727,
-     733,   734,   754,   755,   758,   759,   762,   765,   768,   771,
-     772,   775,   778,   779,   782
+     735,   736,   756,   757,   760,   761,   764,   767,   770,   773,
+     774,   777,   780,   781,   784
 };
 #endif
 
@@ -2890,21 +2890,23 @@ yyreduce:
   case 169: /* KeySym: IDENT  */
 #line 728 "../src/xkbcomp/parser.y"
                         {
-                            if (!resolve_keysym((yyvsp[0].str), &(yyval.keysym)))
+                            if (!resolve_keysym((yyvsp[0].str), &(yyval.keysym))) {
                                 parser_warn(param, "unrecognized keysym \"%s\"", (yyvsp[0].str));
+                                (yyval.keysym) = XKB_KEY_NoSymbol;
+                            }
                             free((yyvsp[0].str));
                         }
-#line 2898 "libxkbcommon.so.0.0.0.p/parser.c"
+#line 2900 "libxkbcommon.so.0.0.0.p/parser.c"
     break;
 
   case 170: /* KeySym: SECTION  */
-#line 733 "../src/xkbcomp/parser.y"
+#line 735 "../src/xkbcomp/parser.y"
                                 { (yyval.keysym) = XKB_KEY_section; }
-#line 2904 "libxkbcommon.so.0.0.0.p/parser.c"
+#line 2906 "libxkbcommon.so.0.0.0.p/parser.c"
     break;
 
   case 171: /* KeySym: Integer  */
-#line 735 "../src/xkbcomp/parser.y"
+#line 737 "../src/xkbcomp/parser.y"
                         {
                             if ((yyvsp[0].num) < 0) {
                                 parser_warn(param, "unrecognized keysym \"%"PRId64"\"", (yyvsp[0].num));
@@ -2922,89 +2924,89 @@ yyreduce:
                                 }
                             }
                         }
-#line 2926 "libxkbcommon.so.0.0.0.p/parser.c"
+#line 2928 "libxkbcommon.so.0.0.0.p/parser.c"
     break;
 
   case 172: /* SignedNumber: MINUS Number  */
-#line 754 "../src/xkbcomp/parser.y"
+#line 756 "../src/xkbcomp/parser.y"
                                         { (yyval.num) = -(yyvsp[0].num); }
-#line 2932 "libxkbcommon.so.0.0.0.p/parser.c"
+#line 2934 "libxkbcommon.so.0.0.0.p/parser.c"
     break;
 
   case 173: /* SignedNumber: Number  */
-#line 755 "../src/xkbcomp/parser.y"
+#line 757 "../src/xkbcomp/parser.y"
                                         { (yyval.num) = (yyvsp[0].num); }
-#line 2938 "libxkbcommon.so.0.0.0.p/parser.c"
+#line 2940 "libxkbcommon.so.0.0.0.p/parser.c"
     break;
 
   case 174: /* Number: FLOAT  */
-#line 758 "../src/xkbcomp/parser.y"
+#line 760 "../src/xkbcomp/parser.y"
                                 { (yyval.num) = (yyvsp[0].num); }
-#line 2944 "libxkbcommon.so.0.0.0.p/parser.c"
+#line 2946 "libxkbcommon.so.0.0.0.p/parser.c"
     break;
 
   case 175: /* Number: INTEGER  */
-#line 759 "../src/xkbcomp/parser.y"
+#line 761 "../src/xkbcomp/parser.y"
                                 { (yyval.num) = (yyvsp[0].num); }
-#line 2950 "libxkbcommon.so.0.0.0.p/parser.c"
+#line 2952 "libxkbcommon.so.0.0.0.p/parser.c"
     break;
 
   case 176: /* Float: FLOAT  */
-#line 762 "../src/xkbcomp/parser.y"
+#line 764 "../src/xkbcomp/parser.y"
                                 { (yyval.num) = 0; }
-#line 2956 "libxkbcommon.so.0.0.0.p/parser.c"
+#line 2958 "libxkbcommon.so.0.0.0.p/parser.c"
     break;
 
   case 177: /* Integer: INTEGER  */
-#line 765 "../src/xkbcomp/parser.y"
+#line 767 "../src/xkbcomp/parser.y"
                                 { (yyval.num) = (yyvsp[0].num); }
-#line 2962 "libxkbcommon.so.0.0.0.p/parser.c"
+#line 2964 "libxkbcommon.so.0.0.0.p/parser.c"
     break;
 
   case 178: /* KeyCode: INTEGER  */
-#line 768 "../src/xkbcomp/parser.y"
+#line 770 "../src/xkbcomp/parser.y"
                                 { (yyval.num) = (yyvsp[0].num); }
-#line 2968 "libxkbcommon.so.0.0.0.p/parser.c"
+#line 2970 "libxkbcommon.so.0.0.0.p/parser.c"
     break;
 
   case 179: /* Ident: IDENT  */
-#line 771 "../src/xkbcomp/parser.y"
+#line 773 "../src/xkbcomp/parser.y"
                                 { (yyval.atom) = xkb_atom_intern(param->ctx, (yyvsp[0].str), strlen((yyvsp[0].str))); free((yyvsp[0].str)); }
-#line 2974 "libxkbcommon.so.0.0.0.p/parser.c"
+#line 2976 "libxkbcommon.so.0.0.0.p/parser.c"
     break;
 
   case 180: /* Ident: DEFAULT  */
-#line 772 "../src/xkbcomp/parser.y"
+#line 774 "../src/xkbcomp/parser.y"
                                 { (yyval.atom) = xkb_atom_intern_literal(param->ctx, "default"); }
-#line 2980 "libxkbcommon.so.0.0.0.p/parser.c"
+#line 2982 "libxkbcommon.so.0.0.0.p/parser.c"
     break;
 
   case 181: /* String: STRING  */
-#line 775 "../src/xkbcomp/parser.y"
+#line 777 "../src/xkbcomp/parser.y"
                                 { (yyval.atom) = xkb_atom_intern(param->ctx, (yyvsp[0].str), strlen((yyvsp[0].str))); free((yyvsp[0].str)); }
-#line 2986 "libxkbcommon.so.0.0.0.p/parser.c"
+#line 2988 "libxkbcommon.so.0.0.0.p/parser.c"
     break;
 
   case 182: /* OptMapName: MapName  */
-#line 778 "../src/xkbcomp/parser.y"
+#line 780 "../src/xkbcomp/parser.y"
                                 { (yyval.str) = (yyvsp[0].str); }
-#line 2992 "libxkbcommon.so.0.0.0.p/parser.c"
+#line 2994 "libxkbcommon.so.0.0.0.p/parser.c"
     break;
 
   case 183: /* OptMapName: %empty  */
-#line 779 "../src/xkbcomp/parser.y"
+#line 781 "../src/xkbcomp/parser.y"
                                 { (yyval.str) = NULL; }
-#line 2998 "libxkbcommon.so.0.0.0.p/parser.c"
+#line 3000 "libxkbcommon.so.0.0.0.p/parser.c"
     break;
 
   case 184: /* MapName: STRING  */
-#line 782 "../src/xkbcomp/parser.y"
+#line 784 "../src/xkbcomp/parser.y"
                                 { (yyval.str) = (yyvsp[0].str); }
-#line 3004 "libxkbcommon.so.0.0.0.p/parser.c"
+#line 3006 "libxkbcommon.so.0.0.0.p/parser.c"
     break;
 
 
-#line 3008 "libxkbcommon.so.0.0.0.p/parser.c"
+#line 3010 "libxkbcommon.so.0.0.0.p/parser.c"
 
       default: break;
     }
@@ -3198,7 +3200,7 @@ yyreturn:
   return yyresult;
 }
 
-#line 785 "../src/xkbcomp/parser.y"
+#line 787 "../src/xkbcomp/parser.y"
 
 
 XkbFile *
