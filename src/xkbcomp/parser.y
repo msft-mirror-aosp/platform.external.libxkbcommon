@@ -726,15 +726,17 @@ KeySyms         :       OBRACE KeySymList CBRACE
 
 KeySym          :       IDENT
                         {
-                            if (!resolve_keysym($1, &$$))
+                            if (!resolve_keysym($1, &$$)) {
                                 parser_warn(param, "unrecognized keysym \"%s\"", $1);
+                                $$ = XKB_KEY_NoSymbol;
+                            }
                             free($1);
                         }
                 |       SECTION { $$ = XKB_KEY_section; }
                 |       Integer
                         {
                             if ($1 < 0) {
-                                parser_warn(param, "unrecognized keysym \"%" PRId64 "\"", $1);
+                                parser_warn(param, "unrecognized keysym \"%"PRId64"\"", $1);
                                 $$ = XKB_KEY_NoSymbol;
                             }
                             else if ($1 < 10) {      /* XKB_KEY_0 .. XKB_KEY_9 */

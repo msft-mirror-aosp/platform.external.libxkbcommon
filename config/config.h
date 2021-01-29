@@ -31,6 +31,8 @@
 
 #define HAVE_STRNDUP 1
 
+#define HAVE_UNISTD_H 1
+
 #define HAVE_XKBCLI_COMPILE_KEYMAP 1
 
 #define HAVE_XKBCLI_HOW_TO_TYPE 1
@@ -43,7 +45,7 @@
 
 #define LIBXKBCOMMON_TOOL_PATH "/usr/local/libexec/xkbcommon"
 
-#define LIBXKBCOMMON_VERSION "1.0.0"
+#define LIBXKBCOMMON_VERSION "1.0.3"
 
 #define WIN32_LEAN_AND_MEAN 1
 

@@ -1,7 +1,7 @@
 project(
     'libxkbcommon',
     'c',
-    version: '1.0.0',
+    version: '1.0.3',
     default_options: [
         'c_std=c99',
         'warning_level=2',
@@ -88,6 +88,9 @@ if get_option('default-options') != ''
     configh_data.set_quoted('DEFAULT_XKB_OPTIONS', get_option('default-options'))
 else
     configh_data.set('DEFAULT_XKB_OPTIONS', 'NULL')
+endif
+if cc.has_header('unistd.h')
+    configh_data.set('HAVE_UNISTD_H', 1)
 endif
 if cc.links('int main(){if(__builtin_expect(1<0,0)){}}', name: '__builtin_expect')
     configh_data.set('HAVE___BUILTIN_EXPECT', 1)
@@ -366,12 +369,140 @@ if get_option('enable-xkbregistry')
                                 )
 endif
 
+man_pages = []
+
+# Tools
+build_tools = have_getopt_long
+if build_tools
+    libxkbcommon_tools_internal = static_library(
+        'tools-internal',
+        'tools/tools-common.h',
+        'tools/tools-common.c',
+        dependencies: libxkbcommon_dep,
+    )
+    tools_dep = declare_dependency(
+        include_directories: [include_directories('tools')],
+        link_with: libxkbcommon_tools_internal,
+    )
+
+    executable('xkbcli', 'tools/xkbcli.c',
+               dependencies: tools_dep, install: true)
+    install_man('tools/xkbcli.1')
+
+    executable('xkbcli-compile-keymap',
+               'tools/compile-keymap.c',
+               dependencies: tools_dep,
+               install: true,
+               install_dir: dir_libexec)
+    install_man('tools/xkbcli-compile-keymap.1')
+    # The same tool again, but with access to some private APIs.
+    executable('compile-keymap',
+               'tools/compile-keymap.c',
+               libxkbcommon_sources,
+               dependencies: [tools_dep],
+               c_args: ['-DENABLE_PRIVATE_APIS'],
+               include_directories: [include_directories('src')],
+               install: false)
+    configh_data.set10('HAVE_XKBCLI_COMPILE_KEYMAP', true)
+    executable('xkbcli-how-to-type',
+               'tools/how-to-type.c',
+               dependencies: tools_dep,
+               install: true,
+               install_dir: dir_libexec)
+    install_man('tools/xkbcli-how-to-type.1')
+    configh_data.set10('HAVE_XKBCLI_HOW_TO_TYPE', true)
+    if cc.has_header('linux/input.h')
+        executable('xkbcli-interactive-evdev',
+                   'tools/interactive-evdev.c',
+                   dependencies: tools_dep,
+                   install: true,
+                   install_dir: dir_libexec)
+        configh_data.set10('HAVE_XKBCLI_INTERACTIVE_EVDEV', true)
+        install_man('tools/xkbcli-interactive-evdev.1')
+    endif
+    if get_option('enable-x11')
+        x11_tools_dep = declare_dependency(
+            link_with: libxkbcommon_x11,
+            dependencies: [
+                tools_dep,
+                xcb_dep,
+                xcb_xkb_dep,
+            ],
+        )
+        executable('xkbcli-interactive-x11',
+                   'tools/interactive-x11.c',
+                   dependencies: x11_tools_dep,
+                   install: true,
+                   install_dir: dir_libexec)
+        install_man('tools/xkbcli-interactive-x11.1')
+        configh_data.set10('HAVE_XKBCLI_INTERACTIVE_X11', true)
+    endif
+    if get_option('enable-wayland')
+        wayland_client_dep = dependency('wayland-client', version: '>=1.2.0', required: false)
+        wayland_protocols_dep = dependency('wayland-protocols', version: '>=1.12', required: false)
+        wayland_scanner_dep = dependency('wayland-scanner', required: false, native: true)
+        if not wayland_client_dep.found() or not wayland_protocols_dep.found() or not wayland_scanner_dep.found()
+            error('''The Wayland xkbcli programs require wayland-client >= 1.2.0, wayland-protocols >= 1.7 which were not found.
+You can disable the Wayland xkbcli programs with -Denable-wayland=false.''')
+        endif
+
+        wayland_scanner = find_program(wayland_scanner_dep.get_pkgconfig_variable('wayland_scanner'))
+        wayland_scanner_code_gen = generator(
+            wayland_scanner,
+            output: '@BASENAME@-protocol.c',
+            arguments: ['code', '@INPUT@', '@OUTPUT@'],
+        )
+        wayland_scanner_client_header_gen = generator(
+            wayland_scanner,
+            output: '@BASENAME@-client-protocol.h',
+            arguments: ['client-header', '@INPUT@', '@OUTPUT@'],
+        )
+        wayland_protocols_datadir = wayland_protocols_dep.get_pkgconfig_variable('pkgdatadir')
+        xdg_shell_xml = wayland_protocols_datadir/'stable/xdg-shell/xdg-shell.xml'
+        xdg_shell_sources = [
+            wayland_scanner_code_gen.process(xdg_shell_xml),
+            wayland_scanner_client_header_gen.process(xdg_shell_xml),
+        ]
+        executable('xkbcli-interactive-wayland',
+                   'tools/interactive-wayland.c',
+                   xdg_shell_sources,
+                   dependencies: [tools_dep, wayland_client_dep],
+                   install: true,
+                   install_dir: dir_libexec)
+        install_man('tools/xkbcli-interactive-wayland.1')
+        configh_data.set10('HAVE_XKBCLI_INTERACTIVE_WAYLAND', true)
+    endif
+
+    if get_option('enable-xkbregistry')
+        configh_data.set10('HAVE_XKBCLI_LIST', true)
+        executable('xkbcli-list',
+                   'tools/registry-list.c',
+                   dependencies: dep_libxkbregistry,
+                   install: true,
+                   install_dir: dir_libexec)
+        install_man('tools/xkbcli-list.1')
+    endif
+endif
+
+
+# xkeyboard-config "verifier"
+xkct_config = configuration_data()
+xkct_config.set('MESON_BUILD_ROOT', meson.build_root())
+xkct_config.set('XKB_CONFIG_ROOT', XKBCONFIGROOT)
+configure_file(input: 'test/xkeyboard-config-test.py.in',
+               output: 'xkeyboard-config-test',
+               configuration: xkct_config)
+
 # Tests
 test_env = environment()
 test_env.set('XKB_LOG_LEVEL', 'debug')
 test_env.set('XKB_LOG_VERBOSITY', '10')
 test_env.set('top_srcdir', meson.source_root())
 test_env.set('top_builddir', meson.build_root())
+test_env.set('HAVE_XKBCLI_INTERACTIVE_EVDEV', configh_data.get('HAVE_XKBCLI_INTERACTIVE_EVDEV', 0).to_string())
+test_env.set('HAVE_XKBCLI_INTERACTIVE_WAYLAND', configh_data.get('HAVE_XKBCLI_INTERACTIVE_WAYLAND', 0).to_string())
+test_env.set('HAVE_XKBCLI_INTERACTIVE_X11', configh_data.get('HAVE_XKBCLI_INTERACTIVE_X11', 0).to_string())
+test_env.set('HAVE_XKBCLI_LIST', configh_data.get('HAVE_XKBCLI_LIST', 0).to_string())
 
 test_configh_data = configuration_data()
 test_configh_data.set_quoted('TEST_XKB_CONFIG_ROOT', meson.source_root()/'test'/'data')
@@ -384,6 +515,8 @@ libxkbcommon_test_internal = static_library(
     'test/common.c',
     'test/test.h',
     'test/evdev-scancodes.h',
+    'bench/bench.c',
+    'bench/bench.h',
     libxkbcommon_sources,
     include_directories: include_directories('src'),
 )
@@ -519,6 +652,12 @@ if get_option('enable-xkbregistry')
         env: test_env,
     )
 endif
+if build_tools
+    test('tool-option-parsing',
+         find_program('test/tool-option-parsing.py'),
+         env: test_env,
+         suite: ['python-tests'])
+endif
 
 valgrind = find_program('valgrind', required: false)
 if valgrind.found()
@@ -538,169 +677,37 @@ endif
 executable('fuzz-keymap', 'fuzz/keymap/target.c', dependencies: test_dep)
 executable('fuzz-compose', 'fuzz/compose/target.c', dependencies: test_dep)
 
-man_pages = []
-
-# Tools
-build_tools = have_getopt_long
-if build_tools
-    libxkbcommon_tools_internal = static_library(
-        'tools-internal',
-        'tools/tools-common.h',
-        'tools/tools-common.c',
-        dependencies: libxkbcommon_dep,
-    )
-    tools_dep = declare_dependency(
-        include_directories: [include_directories('tools')],
-        link_with: libxkbcommon_tools_internal,
-    )
-
-    executable('xkbcli', 'tools/xkbcli.c',
-               dependencies: tools_dep, install: true)
-    install_man('tools/xkbcli.1')
-
-    executable('xkbcli-compile-keymap',
-               'tools/compile-keymap.c',
-               dependencies: tools_dep,
-               install: true,
-               install_dir: dir_libexec)
-    install_man('tools/xkbcli-compile-keymap.1')
-    # The same tool again, but with access to some private APIs.
-    executable('compile-keymap',
-               'tools/compile-keymap.c',
-               libxkbcommon_sources,
-               dependencies: [tools_dep],
-               c_args: ['-DENABLE_PRIVATE_APIS'],
-               include_directories: [include_directories('src')],
-               install: false)
-    configh_data.set10('HAVE_XKBCLI_COMPILE_KEYMAP', true)
-    executable('xkbcli-how-to-type',
-               'tools/how-to-type.c',
-               dependencies: tools_dep,
-               install: true,
-               install_dir: dir_libexec)
-    install_man('tools/xkbcli-how-to-type.1')
-    configh_data.set10('HAVE_XKBCLI_HOW_TO_TYPE', true)
-    if cc.has_header('linux/input.h')
-        executable('xkbcli-interactive-evdev',
-                   'tools/interactive-evdev.c',
-                   dependencies: tools_dep,
-                   install: true,
-                   install_dir: dir_libexec)
-        configh_data.set10('HAVE_XKBCLI_INTERACTIVE_EVDEV', true)
-        install_man('tools/xkbcli-interactive-evdev.1')
-    endif
-    if get_option('enable-x11')
-        x11_tools_dep = declare_dependency(
-            link_with: libxkbcommon_x11,
-            dependencies: [
-                tools_dep,
-                xcb_dep,
-                xcb_xkb_dep,
-            ],
-        )
-        executable('xkbcli-interactive-x11',
-                   'tools/interactive-x11.c',
-                   dependencies: x11_tools_dep,
-                   install: true,
-                   install_dir: dir_libexec)
-        install_man('tools/xkbcli-interactive-x11.1')
-        configh_data.set10('HAVE_XKBCLI_INTERACTIVE_X11', true)
-    endif
-    if get_option('enable-wayland')
-        wayland_client_dep = dependency('wayland-client', version: '>=1.2.0', required: false)
-        wayland_protocols_dep = dependency('wayland-protocols', version: '>=1.12', required: false)
-        wayland_scanner_dep = dependency('wayland-scanner', required: false, native: true)
-        if not wayland_client_dep.found() or not wayland_protocols_dep.found() or not wayland_scanner_dep.found()
-            error('''The Wayland xkbcli programs require wayland-client >= 1.2.0, wayland-protocols >= 1.7 which were not found.
-You can disable the Wayland xkbcli programs with -Denable-wayland=false.''')
-        endif
-
-        wayland_scanner = find_program(wayland_scanner_dep.get_pkgconfig_variable('wayland_scanner'))
-        wayland_scanner_code_gen = generator(
-            wayland_scanner,
-            output: '@BASENAME@-protocol.c',
-            arguments: ['code', '@INPUT@', '@OUTPUT@'],
-        )
-        wayland_scanner_client_header_gen = generator(
-            wayland_scanner,
-            output: '@BASENAME@-client-protocol.h',
-            arguments: ['client-header', '@INPUT@', '@OUTPUT@'],
-        )
-        wayland_protocols_datadir = wayland_protocols_dep.get_pkgconfig_variable('pkgdatadir')
-        xdg_shell_xml = wayland_protocols_datadir/'stable/xdg-shell/xdg-shell.xml'
-        xdg_shell_sources = [
-            wayland_scanner_code_gen.process(xdg_shell_xml),
-            wayland_scanner_client_header_gen.process(xdg_shell_xml),
-        ]
-        executable('xkbcli-interactive-wayland',
-                   'tools/interactive-wayland.c',
-                   xdg_shell_sources,
-                   dependencies: [tools_dep, wayland_client_dep],
-                   install: true,
-                   install_dir: dir_libexec)
-        install_man('tools/xkbcli-interactive-wayland.1')
-        configh_data.set10('HAVE_XKBCLI_INTERACTIVE_WAYLAND', true)
-    endif
-
-    if get_option('enable-xkbregistry')
-        configh_data.set10('HAVE_XKBCLI_LIST', true)
-        executable('xkbcli-list',
-                   'tools/registry-list.c',
-                   dependencies: dep_libxkbregistry,
-                   install: true,
-                   install_dir: dir_libexec)
-        install_man('tools/xkbcli-list.1')
-    endif
-
-    test('tool-option-parsing',
-         find_program('test/tool-option-parsing.py'),
-         env: test_env,
-         suite: ['python-tests'])
-endif
-
-
-# xkeyboard-config "verifier"
-xkct_config = configuration_data()
-xkct_config.set('MESON_BUILD_ROOT', meson.build_root())
-xkct_config.set('XKB_CONFIG_ROOT', XKBCONFIGROOT)
-configure_file(input: 'test/xkeyboard-config-test.py.in',
-               output: 'xkeyboard-config-test',
-               configuration: xkct_config)
-
 
 # Benchmarks.
-libxkbcommon_bench_internal = static_library(
-    'xkbcommon-bench-internal',
-    'bench/bench.c',
-    'bench/bench.h',
-    link_with: libxkbcommon_test_internal,
-)
-bench_dep = declare_dependency(
-    include_directories: include_directories('src'),
-    link_with: libxkbcommon_bench_internal,
-)
 bench_env = environment()
 bench_env.set('top_srcdir', meson.source_root())
 benchmark(
     'key-proc',
-    executable('bench-key-proc', 'bench/key-proc.c', dependencies: bench_dep),
+    executable('bench-key-proc', 'bench/key-proc.c', dependencies: test_dep),
     env: bench_env,
 )
 benchmark(
     'rules',
-    executable('bench-rules', 'bench/rules.c', dependencies: bench_dep),
+    executable('bench-rules', 'bench/rules.c', dependencies: test_dep),
     env: bench_env,
 )
 benchmark(
     'rulescomp',
-    executable('bench-rulescomp', 'bench/rulescomp.c', dependencies: bench_dep),
+    executable('bench-rulescomp', 'bench/rulescomp.c', dependencies: test_dep),
     env: bench_env,
 )
 benchmark(
     'compose',
-    executable('bench-compose', 'bench/compose.c', dependencies: bench_dep),
+    executable('bench-compose', 'bench/compose.c', dependencies: test_dep),
     env: bench_env,
 )
+if get_option('enable-x11')
+  benchmark(
+      'x11',
+      executable('bench-x11', 'bench/x11.c', dependencies: x11_test_dep),
+      env: bench_env,
+  )
+endif
 
 
 # Documentation.
