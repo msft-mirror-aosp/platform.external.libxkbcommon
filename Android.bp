@@ -14,6 +14,7 @@
 
 cc_library_static {
     srcs: [
+        "config/libxkbcommon.so.0.0.0.p/parser.c",
         "src/compose/parser.c",
         "src/compose/paths.c",
         "src/compose/state.c",
@@ -27,7 +28,6 @@ cc_library_static {
         "src/xkbcomp/keymap.c",
         "src/xkbcomp/keymap-dump.c",
         "src/xkbcomp/keywords.c",
-        "src/xkbcomp/parser.c",
         "src/xkbcomp/rules.c",
         "src/xkbcomp/scanner.c",
         "src/xkbcomp/symbols.c",
@@ -55,7 +55,7 @@ cc_library_static {
         // Needed because libxkbcommon uses GNU extension asprintf().
         "-D_GNU_SOURCE",
     ],
-    local_include_dirs: ["src"],
+    local_include_dirs: ["src", "config/libxkbcommon.so.0.0.0.p"],
     export_include_dirs: ["."],
     vendor_available: true,
     host_supported: true,
