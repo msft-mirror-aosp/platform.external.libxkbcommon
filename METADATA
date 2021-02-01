@@ -7,13 +7,14 @@ third_party {
   }
   url {
     type: ARCHIVE
-    value: "https://github.com/xkbcommon/libxkbcommon/archive/xkbcommon-1.0.1.tar.gz"
+    value: "https://github.com/xkbcommon/libxkbcommon/archive/xkbcommon-1.0.3.tar.gz"
   }
-  version: "xkbcommon-1.0.1"
-  license_type: NOTICE
+  version: "xkbcommon-1.0.3"
+  # would be NOTICE save for test/evdev-scancodes.h
+  license_type: RESTRICTED
   last_upgrade_date {
     year: 2020
-    month: 10
-    day: 28
+    month: 11
+    day: 24
   }
 }
