@@ -10,7 +10,7 @@ third_party {
     value: "https://github.com/xkbcommon/libxkbcommon/archive/xkbcommon-1.0.3.tar.gz"
   }
   version: "xkbcommon-1.0.3"
-  license_note: "would be NOTICE save for test/evdev-scancodes.h"
+  # would be NOTICE save for test/evdev-scancodes.h
   license_type: RESTRICTED
   last_upgrade_date {
     year: 2020
