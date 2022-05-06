@@ -55,7 +55,7 @@ usage(void)
 #endif
 #if HAVE_XKBCLI_INTERACTIVE_EVDEV
            "  interactive-evdev\n"
-           "    Interactive debugger for XKB keymaps for evdev\n"
+           "    Interactive debugger for XKB keymaps for evdev (Linux)\n"
            "\n"
 #endif
 #if HAVE_XKBCLI_COMPILE_KEYMAP
