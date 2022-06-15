@@ -243,6 +243,7 @@ typedef struct {
 
 union ExprDef {
     ParseCommon common;
+    /* Maybe someday we can use C11 anonymous struct for ExprCommon here. */
     ExprCommon expr;
     ExprIdent ident;
     ExprString string;

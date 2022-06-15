@@ -1,9 +1,9 @@
 project(
     'libxkbcommon',
     'c',
-    version: '1.4.0',
+    version: '1.0.3',
     default_options: [
-        'c_std=c11',
+        'c_std=c99',
         'warning_level=2',
         'b_lundef=true',
     ],
@@ -49,7 +49,7 @@ endif
 
 XKBCONFIGEXTRAPATH = get_option('xkb-config-extra-path')
 if XKBCONFIGEXTRAPATH == ''
-    XKBCONFIGEXTRAPATH = get_option('prefix')/get_option('sysconfdir')/'xkb'
+    XKBCONFIGEXTRAPATH = join_paths(get_option('prefix'), get_option('sysconfdir'), 'xkb')
 endif
 
 # The X locale directory for compose.
@@ -125,6 +125,8 @@ elif cc.has_header_symbol('stdlib.h', '__secure_getenv', prefix: system_ext_defi
 else
     message('C library does not support secure_getenv, using getenv instead')
 endif
+have_getopt_long = cc.has_header_symbol('getopt.h', 'getopt_long',
+                                        prefix: '#define _GNU_SOURCE')
 if not cc.has_header_symbol('limits.h', 'PATH_MAX', prefix: system_ext_define)
     if host_machine.system() == 'windows'
         # see https://docs.microsoft.com/en-us/windows/win32/fileio/naming-a-file#maximum-path-length-limitation
@@ -150,7 +152,6 @@ have_version_script = cc.links(
     name: '-Wl,--version-script',
 )
 
-map_to_def = find_program('scripts/map-to-def')
 
 # libxkbcommon.
 # Note: we use some yacc extensions, which work with either GNU bison
@@ -230,42 +231,30 @@ libxkbcommon_sources = [
     'src/utils.h',
 ]
 libxkbcommon_link_args = []
-libxkbcommon_link_deps = []
 if have_version_script
     libxkbcommon_link_args += '-Wl,--version-script=' + meson.source_root()/'xkbcommon.map'
-    libxkbcommon_link_deps += 'xkbcommon.map'
-elif cc.get_argument_syntax() == 'msvc'
-    libxkbcommon_def = custom_target('xkbcommon.def',
-        command: [map_to_def, '@INPUT@', '@OUTPUT@'],
-        input: 'xkbcommon.map',
-        output: 'kxbcommon.def',
-    )
-    libxkbcommon_link_deps += libxkbcommon_def
-    libxkbcommon_link_args += '/DEF:' + libxkbcommon_def.full_path()
 endif
 libxkbcommon = library(
     'xkbcommon',
-    'include/xkbcommon/xkbcommon.h',
+    'xkbcommon/xkbcommon.h',
     libxkbcommon_sources,
     link_args: libxkbcommon_link_args,
-    link_depends: libxkbcommon_link_deps,
+    link_depends: 'xkbcommon.map',
     gnu_symbol_visibility: 'hidden',
     version: '0.0.0',
     install: true,
-    include_directories: include_directories('src', 'include'),
+    include_directories: include_directories('src'),
 )
 install_headers(
-    'include/xkbcommon/xkbcommon.h',
-    'include/xkbcommon/xkbcommon-compat.h',
-    'include/xkbcommon/xkbcommon-compose.h',
-    'include/xkbcommon/xkbcommon-keysyms.h',
-    'include/xkbcommon/xkbcommon-names.h',
+    'xkbcommon/xkbcommon.h',
+    'xkbcommon/xkbcommon-compat.h',
+    'xkbcommon/xkbcommon-compose.h',
+    'xkbcommon/xkbcommon-keysyms.h',
+    'xkbcommon/xkbcommon-names.h',
     subdir: 'xkbcommon',
 )
-
-dep_libxkbcommon = declare_dependency(
+libxkbcommon_dep = declare_dependency(
     link_with: libxkbcommon,
-    include_directories: include_directories('include'),
 )
 pkgconfig.generate(
     libxkbcommon,
@@ -298,29 +287,19 @@ You can disable X11 support with -Denable-x11=false.''')
         'src/atom.c',
     ]
     libxkbcommon_x11_link_args = []
-    libxkbcommon_x11_link_deps = []
     if have_version_script
         libxkbcommon_x11_link_args += '-Wl,--version-script=' + meson.source_root()/'xkbcommon-x11.map'
-        libxkbcommon_x11_link_deps += 'xkbcommon-x11.map'
-    elif cc.get_argument_syntax() == 'msvc'
-        libxkbcommon_x11_def = custom_target('xkbcommon-x11.def',
-            command: [map_to_def, '@INPUT@', '@OUTPUT@'],
-            input: 'xkbcommon-x11.map',
-            output: 'xkbcommon-x11.def',
-        )
-        libxkbcommon_x11_link_deps += libxkbcommon_x11_def
-        libxkbcommon_x11_link_args += '/DEF:' + libxkbcommon_x11_def.full_path()
     endif
     libxkbcommon_x11 = library(
         'xkbcommon-x11',
-        'include/xkbcommon/xkbcommon-x11.h',
+        'xkbcommon/xkbcommon-x11.h',
         libxkbcommon_x11_sources,
         link_args: libxkbcommon_x11_link_args,
-        link_depends: libxkbcommon_x11_link_deps,
+        link_depends: 'xkbcommon-x11.map',
         gnu_symbol_visibility: 'hidden',
         version: '0.0.0',
         install: true,
-        include_directories: include_directories('src', 'include'),
+        include_directories: include_directories('src'),
         link_with: libxkbcommon,
         dependencies: [
             xcb_dep,
@@ -328,12 +307,11 @@ You can disable X11 support with -Denable-x11=false.''')
         ],
     )
     install_headers(
-        'include/xkbcommon/xkbcommon-x11.h',
+        'xkbcommon/xkbcommon-x11.h',
         subdir: 'xkbcommon',
     )
-    dep_libxkbcommon_x11 = declare_dependency(
+    libxkbcommon_x11_dep = declare_dependency(
         link_with: libxkbcommon_x11,
-        include_directories: include_directories('include'),
     )
     pkgconfig.generate(
         libxkbcommon_x11,
@@ -358,33 +336,23 @@ if get_option('enable-xkbregistry')
         'src/util-list.c',
     ]
     libxkbregistry_link_args = []
-    libxkbregistry_link_deps = []
     if have_version_script
         libxkbregistry_link_args += '-Wl,--version-script=' + meson.source_root()/'xkbregistry.map'
-        libxkbregistry_link_deps += 'xkbregistry.map'
-    elif cc.get_argument_syntax() == 'msvc'
-        libxkbregistry_def = custom_target('xkbregistry.def',
-            command: [map_to_def, '@INPUT@', '@OUTPUT@'],
-            input: 'xkbregistry.map',
-            output: 'xkbregistry.def',
-        )
-        libxkbregistry_link_deps += libxkbregistry_def
-        libxkbregistry_link_args += '/DEF:' + libxkbregistry_def.full_path()
     endif
     libxkbregistry = library(
         'xkbregistry',
-        'include/xkbcommon/xkbregistry.h',
+        'xkbcommon/xkbregistry.h',
         libxkbregistry_sources,
         link_args: libxkbregistry_link_args,
-        link_depends: libxkbregistry_link_deps,
+        link_depends: 'xkbregistry.map',
         gnu_symbol_visibility: 'hidden',
         dependencies: deps_libxkbregistry,
         version: '0.0.0',
         install: true,
-        include_directories: include_directories('src', 'include'),
+        include_directories: include_directories('src'),
     )
     install_headers(
-        'include/xkbcommon/xkbregistry.h',
+        'xkbcommon/xkbregistry.h',
         subdir: 'xkbcommon',
     )
     pkgconfig.generate(
@@ -396,24 +364,24 @@ if get_option('enable-xkbregistry')
     )
 
     dep_libxkbregistry = declare_dependency(
-        link_with: libxkbregistry,
-        include_directories: include_directories('include'),
-    )
+                                include_directories: include_directories('xkbcommon'),
+                                link_with: libxkbregistry
+                                )
 endif
 
 man_pages = []
 
 # Tools
-build_tools = get_option('enable-tools') and cc.has_header_symbol('getopt.h', 'getopt_long', prefix: '#define _GNU_SOURCE')
+build_tools = have_getopt_long
 if build_tools
     libxkbcommon_tools_internal = static_library(
         'tools-internal',
         'tools/tools-common.h',
         'tools/tools-common.c',
-        dependencies: dep_libxkbcommon,
+        dependencies: libxkbcommon_dep,
     )
     tools_dep = declare_dependency(
-        include_directories: [include_directories('tools', 'include')],
+        include_directories: [include_directories('tools')],
         link_with: libxkbcommon_tools_internal,
     )
 
@@ -421,11 +389,11 @@ if build_tools
                dependencies: tools_dep, install: true)
     install_man('tools/xkbcli.1')
 
-    xkbcli_compile_keymap = executable('xkbcli-compile-keymap',
-                                       'tools/compile-keymap.c',
-                                       dependencies: tools_dep,
-                                       install: true,
-                                       install_dir: dir_libexec)
+    executable('xkbcli-compile-keymap',
+               'tools/compile-keymap.c',
+               dependencies: tools_dep,
+               install: true,
+               install_dir: dir_libexec)
     install_man('tools/xkbcli-compile-keymap.1')
     # The same tool again, but with access to some private APIs.
     executable('compile-keymap',
@@ -433,12 +401,7 @@ if build_tools
                libxkbcommon_sources,
                dependencies: [tools_dep],
                c_args: ['-DENABLE_PRIVATE_APIS'],
-               include_directories: [include_directories('src', 'include')],
-               install: false)
-    executable('compose',
-               'tools/compose.c',
-               dependencies: tools_dep,
-               include_directories: [include_directories('src', 'include')],
+               include_directories: [include_directories('src')],
                install: false)
     configh_data.set10('HAVE_XKBCLI_COMPILE_KEYMAP', true)
     executable('xkbcli-how-to-type',
@@ -555,17 +518,17 @@ libxkbcommon_test_internal = static_library(
     'bench/bench.c',
     'bench/bench.h',
     libxkbcommon_sources,
-    include_directories: include_directories('src', 'include'),
+    include_directories: include_directories('src'),
 )
 test_dep = declare_dependency(
-    include_directories: include_directories('src', 'include'),
+    include_directories: include_directories('src'),
     link_with: libxkbcommon_test_internal,
 )
 if get_option('enable-x11')
     libxkbcommon_x11_internal = static_library(
         'xkbcommon-x11-internal',
         libxkbcommon_x11_sources,
-        include_directories: include_directories('src', 'include'),
+        include_directories: include_directories('src'),
         link_with: libxkbcommon_test_internal,
         dependencies: [
             xcb_dep,
@@ -694,22 +657,6 @@ if build_tools
          find_program('test/tool-option-parsing.py'),
          env: test_env,
          suite: ['python-tests'])
-
-    # A set of keysyms to test for. Add one or two symbols to this array
-    # whenever the xorgproto gets updated to make sure we resolve them.
-    keysyms_to_test = [
-        'XF86Macro23',
-    ]
-
-    env = environment()
-    env.set('XKB_CONFIG_ROOT', meson.source_root()/'test'/'data')
-    foreach keysym: keysyms_to_test
-        test('keysym-test-@0@'.format(keysym),
-             find_program('test/test-keysym.py'),
-             env: env,
-             args: [keysym, '--tool', xkbcli_compile_keymap],
-             suite: ['python-tests'])
-    endforeach
 endif
 
 valgrind = find_program('valgrind', required: false)
@@ -754,11 +701,6 @@ benchmark(
     executable('bench-compose', 'bench/compose.c', dependencies: test_dep),
     env: bench_env,
 )
-benchmark(
-    'atom',
-    executable('bench-atom', 'bench/atom.c', dependencies: test_dep),
-    env: bench_env,
-)
 if get_option('enable-x11')
   benchmark(
       'x11',
@@ -784,12 +726,11 @@ You can disable the documentation with -Denable-docs=false.''')
         'doc/compat.md',
         'doc/user-configuration.md',
         'doc/rules-format.md',
-        'doc/keymap-format-text-v1.md',
-        'include/xkbcommon/xkbcommon.h',
-        'include/xkbcommon/xkbcommon-names.h',
-        'include/xkbcommon/xkbcommon-x11.h',
-        'include/xkbcommon/xkbcommon-compose.h',
-        'include/xkbcommon/xkbregistry.h',
+        'xkbcommon/xkbcommon.h',
+        'xkbcommon/xkbcommon-names.h',
+        'xkbcommon/xkbcommon-x11.h',
+        'xkbcommon/xkbcommon-compose.h',
+        'xkbcommon/xkbregistry.h',
     ]
     doxygen_data = configuration_data()
     doxygen_data.set('PACKAGE_NAME', meson.project_name())
@@ -815,14 +756,3 @@ You can disable the documentation with -Denable-docs=false.''')
 endif
 
 configure_file(output: 'config.h', configuration: configh_data)
-
-
-# Stable variables for projects using xkbcommon as a subproject.
-# These variables should not be renamed.
-libxkbcommon_dep = dep_libxkbcommon
-if get_option('enable-x11')
-  libxkbcommon_x11_dep = dep_libxkbcommon_x11
-endif
-if get_option('enable-xkbregistry')
-  libxkbregistry_dep = dep_libxkbregistry
-endif

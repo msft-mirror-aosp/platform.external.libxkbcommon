@@ -24,7 +24,6 @@
 #include "config.h"
 
 #include <getopt.h>
-#include <stdbool.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <errno.h>
@@ -36,9 +35,9 @@
 static void
 usage(const char *argv0, FILE *fp)
 {
-    fprintf(fp, "Usage: %s [--keysym] [--rules <rules>] [--model <model>] "
+    fprintf(fp, "Usage: %s [--rules <rules>] [--model <model>] "
                 "[--layout <layout>] [--variant <variant>] [--options <options>]"
-                " <unicode codepoint/keysym>\n", argv0);
+                " <unicode codepoint>\n", argv0);
 }
 
 int
@@ -49,7 +48,6 @@ main(int argc, char *argv[])
     const char *layout_ = NULL;
     const char *variant = NULL;
     const char *options = NULL;
-    bool keysym_mode = false;
     int err = EXIT_FAILURE;
     struct xkb_context *ctx = NULL;
     char *endp;
@@ -62,7 +60,6 @@ main(int argc, char *argv[])
     xkb_keycode_t min_keycode, max_keycode;
     xkb_mod_index_t num_mods;
     enum options {
-        OPT_KEYSYM,
         OPT_RULES,
         OPT_MODEL,
         OPT_LAYOUT,
@@ -71,7 +68,6 @@ main(int argc, char *argv[])
     };
     static struct option opts[] = {
         {"help",                 no_argument,            0, 'h'},
-        {"keysym",               no_argument,            0, OPT_KEYSYM},
         {"rules",                required_argument,      0, OPT_RULES},
         {"model",                required_argument,      0, OPT_MODEL},
         {"layout",               required_argument,      0, OPT_LAYOUT},
@@ -89,9 +85,6 @@ main(int argc, char *argv[])
             break;
 
         switch (opt) {
-        case OPT_KEYSYM:
-            keysym_mode = true;
-            break;
         case OPT_RULES:
             rules = optarg;
             break;
@@ -120,26 +113,18 @@ main(int argc, char *argv[])
         exit(EXIT_INVALID_USAGE);
     }
 
-    if (keysym_mode) {
-        keysym = xkb_keysym_from_name(argv[optind], XKB_KEYSYM_NO_FLAGS);
-        if (keysym == XKB_KEY_NoSymbol) {
-            fprintf(stderr, "Failed to convert argument to keysym\n");
-            goto err;
-        }
-    } else {
-        errno = 0;
-        val = strtol(argv[optind], &endp, 0);
-        if (errno != 0 || endp == argv[optind] || val < 0 || val > 0x10FFFF) {
-            usage(argv[0], stderr);
-            exit(EXIT_INVALID_USAGE);
-        }
-        codepoint = (uint32_t) val;
+    errno = 0;
+    val = strtol(argv[optind], &endp, 0);
+    if (errno != 0 || endp == argv[optind] || val < 0 || val > 0x10FFFF) {
+        usage(argv[0], stderr);
+        exit(EXIT_INVALID_USAGE);
+    }
+    codepoint = (uint32_t) val;
 
-        keysym = xkb_utf32_to_keysym(codepoint);
-        if (keysym == XKB_KEY_NoSymbol) {
-            fprintf(stderr, "Failed to convert codepoint to keysym\n");
-            goto err;
-        }
+    keysym = xkb_utf32_to_keysym(codepoint);
+    if (keysym == XKB_KEY_NoSymbol) {
+        fprintf(stderr, "Failed to convert codepoint to keysym\n");
+        goto err;
     }
 
     ret = xkb_keysym_get_name(keysym, name, sizeof(name));

@@ -197,10 +197,8 @@ $ cat $XDG_CONFIG_HOME/xkb/rules/evdev.xml
             <name>orange</name>
             <shortDescription>or</shortDescription>
             <description>Orange (Banana)</description>
-          </configItem>
-        </variant>
+          </variant>
       </variantList>
-    </layout>
   </layoutList>
   <optionList>
     <group allowMultipleSelection="true">

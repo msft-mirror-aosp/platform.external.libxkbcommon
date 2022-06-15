@@ -40,6 +40,7 @@ main(int argc, char *argv[])
     struct xkb_rule_names rmlvo = {
         "evdev", "pc105", "us,il", ",", "ctrl:nocaps,grp:menu_toggle",
     };
+    struct xkb_component_names kccgst;
     struct bench bench;
     char *elapsed;
 
@@ -51,8 +52,6 @@ main(int argc, char *argv[])
 
     bench_start(&bench);
     for (i = 0; i < BENCHMARK_ITERATIONS; i++) {
-        struct xkb_component_names kccgst;
-
         assert(xkb_components_from_rules(ctx, &rmlvo, &kccgst));
         free(kccgst.keycodes);
         free(kccgst.types);
