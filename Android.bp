@@ -96,12 +96,12 @@ cc_library_static {
         "-D_GNU_SOURCE",
     ],
     static_libs: [
-        "libxml2"
+        "libxml2",
     ],
     local_include_dirs: [
         "src",
         "config",
-        "config/libxkbcommon.so.0.0.0.p"
+        "config/libxkbcommon.so.0.0.0.p",
     ],
     export_include_dirs: ["include"],
     vendor_available: true,
